@@ -1,0 +1,23 @@
+{
+  "left_leg": {
+    "pin": 4,
+    "min": 0,
+    "max": 180,
+    "center": 90,
+    "name": "left leg"
+  },
+  "right_leg": {
+    "pin": 3,
+    "min": 0,
+    "max": 180,
+    "center": 90,
+    "name": "right leg"
+  },
+  "fewafewafewa": {
+    "pin": 41414,
+    "min": 0,
+    "max": 180,
+    "center": 90,
+    "name": "fewafewafewa"
+  }
+}

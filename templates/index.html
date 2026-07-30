@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Control Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="top-bar">
+            <h1>Robot Control Panel</h1>
+            <nav id="tab-nav">
+                <button class="tab-btn active" data-tab="home">Home</button>
+                <button class="tab-btn" data-tab="editor">Animation Editor</button>
+                <button class="tab-btn" data-tab="keymapper">Key Mapper</button>
+                <button class="tab-btn" data-tab="servos">Servos</button>
+            </nav>
+        </div>
+        <div id="main-content">
+            <div id="camera-panel">
+                <img src="/camera" alt="Camera feed">
+                <div id="mic-controls">
+                    <div id="mic-status">
+                        <span id="status-dot"></span>
+                        <span id="status-text">No microphone connected</span>
+                    </div>
+                    <button id="mic-toggle">Connect Microphone</button>
+                    <div id="device-selector">
+                        <select id="device-select"></select>
+                        <button id="device-confirm">Use This Mic</button>
+                        <button id="device-cancel">Cancel</button>
+                    </div>
+                    <div id="audio-meter">
+                        <div id="meter-bar"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="right-panel">
+
+                <!-- Home Tab -->
+                <div class="tab-content active" id="home-tab">
+                    <div style="padding: 20px; color: #555;">
+                        <h2 style="color: #F06449; font-weight: 400; margin-bottom: 16px;">Robot Status</h2>
+                        <p id="robot-state" style="font-size: 18px;">Idle</p>
+                        <p style="margin-top: 12px; color: #777;">
+                            Use <strong>W/A/S/D</strong> or your custom key bindings to control the robot.<br>
+                            Click the tabs above to edit animations or configure key mappings.
+                        </p>
+                        <div id="home-settings" style="margin-top: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="font-size: 16px; color: #555; white-space: nowrap;">Idle animation:</label>
+                                <select id="idle-anim-select" style="background:#EDE6E3; border:1px solid #C5C0BD; color:#1a1a1a; padding:5px 10px; border-radius:4px; font-size:16px; font-family:inherit; flex:1; max-width:220px;">
+                                    <option value="">None (return to center)</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="anim-paused-check" style="accent-color:#F06449; width:18px; height:18px;">
+                                <label for="anim-paused-check" style="font-size:16px; color:#555;">Disable animation loop (for testing)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor Tab -->
+                <div class="tab-content" id="editor-tab">
+                    <div id="editor-sidebar">
+                        <h3>Animations</h3>
+                        <div id="anim-list"></div>
+                        <div class="sidebar-actions">
+                            <button id="anim-add">+ New</button>
+                            <button id="anim-delete" class="danger">Delete</button>
+                            <button id="anim-preview">Preview</button>
+                            <button id="anim-stop">Stop</button>
+                        </div>
+                    </div>
+                    <div id="editor-main">
+                        <div id="editor-detail" style="display:none;">
+                            <div id="anim-meta">
+                                <label>Name: <input type="text" id="anim-name"></label>
+                                <label>End (ms): <input type="number" id="anim-end" min="100" step="100"></label>
+                                <label>Loop: <input type="checkbox" id="anim-loop"></label>
+                                <label>View (ms): <input type="number" id="anim-view" min="500" step="100"></label>
+                            </div>
+                            <div class="timeline-section">
+                                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; margin-top: 8px;">
+                                    <h4 style="margin:0;">Timeline</h4>
+                                    <button id="kf-add" class="btn-small">+ Keyframe</button>
+                                    <button id="kf-delete" class="btn-small" style="border-color:#F06449;color:#F06449;">Delete Keyframe</button>
+                                </div>
+                                <div id="timeline"></div>
+                            </div>
+                            <div id="servo-sliders"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Mapper Tab -->
+                <div class="tab-content" id="keymapper-tab">
+                    <div style="display:flex; justify-content: space-between; align-items: bottom; margin-top: auto; margin-bottom: 16px;">
+                        <h3 style="color: #F06449; font-weight: 400; font-size: 18px;">Key Bindings</h3>
+                        <div style="display:flex; gap:8px;">
+                            <button id="km-add" class="btn-small">+ Add Binding</button>
+                            <button id="km-refresh" class="btn-small">Refresh</button>
+                        </div>
+                    </div>
+                    <table id="km-table">
+                        <thead>
+                            <tr><th>Key</th><th>Animation</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="km-table-body"></tbody>
+                    </table>
+                    <div id="km-capture" style="display:none;">
+                        <span id="km-capture-status">Press a key to bind...</span>
+                        <select id="km-anim-select"></select>
+                        <button onclick="KeyMapper.confirm()">Bind</button>
+                        <button onclick="KeyMapper.cancelCapture()" style="background:#C5C0BD;color:#1a1a1a;">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Servos Tab -->
+                <div class="tab-content" id="servos-tab">
+                    <div id="servo-sidebar">
+                        <h3 style="color: #F06449; font-weight: 400; margin-bottom: 12px;">Add Servo</h3>
+                        <div id="servo-add-form">
+                            <div class="servo-form-row">
+                                <label class="servo-form-label">Name</label>
+                                <input type="text" id="servo-new-name" placeholder="e.g. Front Left Hip">
+                            </div>
+                            <div class="servo-form-row">
+                                <label class="servo-form-label">GPIO Pin</label>
+                                <input type="number" id="servo-new-pin" placeholder="17" min="2" max="27">
+                            </div>
+                            <div class="servo-form-row">
+                                <label class="servo-form-label">Min Angle</label>
+                                <input type="number" id="servo-new-min" value="0" placeholder="0">
+                            </div>
+                            <div class="servo-form-row">
+                                <label class="servo-form-label">Max Angle</label>
+                                <input type="number" id="servo-new-max" value="180" placeholder="180">
+                            </div>
+                            <div class="servo-form-row">
+                                <label class="servo-form-label">Center Angle</label>
+                                <input type="number" id="servo-new-center" placeholder="90">
+                            </div>
+                            <div style="display:flex; gap:8px; margin-top: 10px;">
+                                <button id="servo-add-btn" style="padding:7px 18px;background:#F06449;border:none;color:#fff;cursor:pointer;border-radius:4px;font-size:15px;font-family:inherit;">Add Servo</button>
+                                <button id="servo-test-pin-btn" class="btn-small">Test Pin</button>
+                                <button id="servo-refresh" class="btn-small">Refresh</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="servo-main">
+                        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 style="color: #F06449; font-weight: 400; margin:0;">Configured Servos</h3>
+                        </div>
+                        <div id="servo-list"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/keymapper.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/servo-manager.js') }}"></script>
+</body>
+
+</html>
