@@ -44,23 +44,24 @@ class ServoController:
         self._servos: dict[str, ServoInfo] = {s.id: s for s in servos}
         self._current_angles: dict[str, int] = {s.id: s.center for s in servos}
         self._target_angles: dict[str, int] = {s.id: s.center for s in servos}
-        self._pi = None
+        self._chip = -1
         self._dry_run = True
         self._lock = threading.Lock()
         self._init_hardware()
 
     def _init_hardware(self):
         try:
-            import pigpio  # type: ignore
-            self._pi = pigpio.pi()
-            if self._pi is None or self._pi.connected is False:
-                raise RuntimeError("Unable to connect to pigpiod daemon")
+            import lgpio  # type: ignore
+            h = lgpio.gpiochip_open(0)
+            if h < 0:
+                raise OSError(f"gpiochip_open failed with error {h}")
+            self._chip = h
             self._dry_run = False
-            print("ServoController: pigpio connected, hardware mode active")
+            print("ServoController: lgpio gpiochip0 opened, hardware mode active")
         except Exception as e:
-            self._pi = None
+            self._chip = -1
             self._dry_run = True
-            print(f"ServoController: pigpio not available ({e}), running in dry-run mode")
+            print(f"ServoController: lgpio not available ({e}), running in dry-run mode")
 
     @property
     def dry_run(self) -> bool:
@@ -139,39 +140,31 @@ class ServoController:
             self._servos[servo.id] = servo
             self._current_angles[servo.id] = servo.center
             self._target_angles[servo.id] = servo.center
-            if self._pi:
-                try:
-                    pw = ServoController._angle_to_pulsewidth(servo.center)
-                    self._pi.set_servo_pulsewidth(servo.pin, pw)
-                except Exception:
-                    pass
+        self._set_hardware(servo, servo.center)
 
     def remove_servo(self, servo_id: str) -> bool:
         with self._lock:
             servo = self._servos.get(servo_id)
             if servo is None:
                 return False
-            if self._pi:
-                try:
-                    self._pi.set_servo_pulsewidth(servo.pin, 0)
-                except Exception:
-                    pass
+            self._stop_pin(servo.pin)
             del self._servos[servo_id]
             self._current_angles.pop(servo_id, None)
             self._target_angles.pop(servo_id, None)
         return True
 
     def test_pin(self, pin: int):
-        if self._dry_run or self._pi is None:
+        if self._dry_run or self._chip < 0:
             return
+        import lgpio  # type: ignore
         try:
-            self._pi.set_servo_pulsewidth(pin, ServoController._angle_to_pulsewidth(0))
+            lgpio.tx_pwm(self._chip, pin, 50.0, ServoController._angle_to_duty(0))
             time.sleep(0.5)
-            self._pi.set_servo_pulsewidth(pin, ServoController._angle_to_pulsewidth(90))
+            lgpio.tx_pwm(self._chip, pin, 50.0, ServoController._angle_to_duty(90))
             time.sleep(0.5)
-            self._pi.set_servo_pulsewidth(pin, ServoController._angle_to_pulsewidth(180))
+            lgpio.tx_pwm(self._chip, pin, 50.0, ServoController._angle_to_duty(180))
             time.sleep(0.5)
-            self._pi.set_servo_pulsewidth(pin, 0)
+            lgpio.tx_pwm(self._chip, pin, 0, 0)
         except Exception as e:
             print(f"ServoController: pin {pin} test failed: {e}")
 
@@ -180,28 +173,36 @@ class ServoController:
         self.set_all_angles(angles)
 
     def _set_hardware(self, servo: ServoInfo, angle: int):
-        if self._dry_run or self._pi is None:
+        if self._dry_run or self._chip < 0:
             return
+        import lgpio  # type: ignore
         try:
-            pw = ServoController._angle_to_pulsewidth(angle)
-            self._pi.set_servo_pulsewidth(servo.pin, pw)
+            duty = ServoController._angle_to_duty(angle)
+            lgpio.tx_pwm(self._chip, servo.pin, 50.0, duty)
+        except Exception:
+            pass
+
+    def _stop_pin(self, pin: int):
+        if self._dry_run or self._chip < 0:
+            return
+        import lgpio  # type: ignore
+        try:
+            lgpio.tx_pwm(self._chip, pin, 0, 0)
         except Exception:
             pass
 
     @staticmethod
-    def _angle_to_pulsewidth(angle: int) -> int:
-        return int(500 + (angle / 180.0) * 2000)
+    def _angle_to_duty(angle: int) -> int:
+        pulse_us = 500 + (angle / 180.0) * 2000
+        return int(pulse_us * 50)
 
     def shutdown(self):
         for servo in self._servos.values():
-            if self._pi:
-                try:
-                    self._pi.set_servo_pulsewidth(servo.pin, 0)
-                except Exception:
-                    pass
-        if self._pi:
+            self._stop_pin(servo.pin)
+        if self._chip >= 0:
+            import lgpio  # type: ignore
             try:
-                self._pi.stop()
+                lgpio.gpiochip_close(self._chip)
             except Exception:
                 pass
-        self._pi = None
+            self._chip = -1
