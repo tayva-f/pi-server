@@ -8,7 +8,8 @@ Flask + SocketIO web server for controlling a 4-legged robot with 8+ servos via 
 # Install dependencies
 uv sync
 
-# Ensure lgpio is available (built into modern Pi OS kernel)
+# Ensure lgpio is available (built into modern Pi OS kernel; GPIO Zero uses
+# it as its default pin factory)
 # Grant GPIO access to your user:
 sudo usermod -a -G gpio $USER
 # Log out and back in for group membership to take effect
@@ -26,7 +27,7 @@ The web UI is served at `http://<pi-ip>:3000`.
 ```
 main.py                     Flask + SocketIO server (port 3000)
 robot/
-  servo.py                  ServoController — GPIO servo management via lgpio
+  servo.py                  ServoController — GPIO servo management via GPIO Zero (AngularServo)
   animation.py              Animation engine — keyframe interpolation, playback
   keymapper.py              Key → animation mapper with hold/release logic
   storage.py                JSON file persistence (data/*.json)
@@ -46,7 +47,7 @@ data/
 
 ## Tests / verification
 
-This project does not currently have a test runner. The server includes a dry-run mode that activates automatically when pigpio is unavailable, allowing the web UI to be tested without hardware.
+This project does not currently have a test runner. The server includes a dry-run mode that activates automatically when GPIO Zero cannot load a pin factory (e.g. not running on a Pi), allowing the web UI to be tested without hardware.
 
 To verify Python syntax:
 
@@ -56,7 +57,7 @@ uv run python -m py_compile main.py robot/servo.py robot/animation.py robot/keym
 
 ## Key behaviors
 
-- **Dry-run mode**: If lgpio is unavailable (/dev/gpiochip0 can't be opened), the server starts in dry-run mode so the web UI remains functional for editing animations and bindings.
+- **Dry-run mode**: If GPIO Zero can't create any servo devices (no pin factory available, e.g. on a non-Pi machine), the server starts in dry-run mode so the web UI remains functional for editing animations and bindings.
 - **Hold-to-play, release-to-stop**: Holding a bound key plays the mapped animation in a loop. Releasing returns servos smoothly to their center positions (~300ms).
 - **Multi-key support**: Holding multiple bound keys switches to the most recently pressed key's animation. Releasing falls back to the next held key or idle.
 - **Smooth loop wrap**: For looping animations, the gap between the last keyframe and the end time interpolates back to the first keyframe's angles (no jarring jumps).
